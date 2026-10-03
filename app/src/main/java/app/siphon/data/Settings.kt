@@ -27,6 +27,7 @@ data class AppSettings(
     val autoUpdate: Boolean = true,
     val nightly: Boolean = false,
     val lastUpdateCheck: Long = 0,
+    val materialYou: Boolean = false,
 ) {
     fun toOptions() = DownloadOptions(
         preset = defaultPreset,
@@ -60,6 +61,7 @@ class SettingsRepository(private val context: Context) {
         val autoUpdate = booleanPreferencesKey("auto_update")
         val nightly = booleanPreferencesKey("nightly")
         val lastCheck = longPreferencesKey("last_update_check")
+        val materialYou = booleanPreferencesKey("material_you")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p -> p.toSettings() }
@@ -83,6 +85,7 @@ class SettingsRepository(private val context: Context) {
             p[K.autoUpdate] = s.autoUpdate
             p[K.nightly] = s.nightly
             p[K.lastCheck] = s.lastUpdateCheck
+            p[K.materialYou] = s.materialYou
         }
     }
 
@@ -104,6 +107,7 @@ class SettingsRepository(private val context: Context) {
             autoUpdate = this[K.autoUpdate] ?: d.autoUpdate,
             nightly = this[K.nightly] ?: d.nightly,
             lastUpdateCheck = this[K.lastCheck] ?: d.lastUpdateCheck,
+            materialYou = this[K.materialYou] ?: d.materialYou,
         )
     }
 }

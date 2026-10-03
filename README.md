@@ -13,6 +13,23 @@ Python, yt-dlp, ffmpeg and QuickJS ship inside the APK via
 - Background queue (foreground service), 1–4 parallel downloads, cancel / retry, yt-dlp logs
 - Library grid with search and filters; files saved to `Download/Siphon`
 
+## Design
+"Siphon brewer": the app is named after the vacuum coffee maker, so the palette borrows its materials:
+espresso surfaces, a brass primary, glass blue for progress, sage for audio and cherry red for errors.
+Light mode is cool lab glass rather than warm paper. Titles use Fraunces (soft optical axis),
+everything else Manrope. The one bold element is the liquid fill: a download's thumbnail
+fills from the bottom as it progresses. Tokens live in `ui/theme/Theme.kt`.
+
+Layouts: download and queue side by side at ≥1100dp (tablet landscape), a single centered column below that.
+
+### Screenshot renders
+Every screen is rendered on the JVM (Roborazzi + Robolectric) at tablet landscape/portrait and phone sizes,
+in light and dark:
+
+```bash
+./gradlew :app:recordRoborazziDebug   # writes app/screenshots/*.png
+```
+
 ## Build
 Requires the Android SDK (`ANDROID_HOME`) and JDK 17+.
 

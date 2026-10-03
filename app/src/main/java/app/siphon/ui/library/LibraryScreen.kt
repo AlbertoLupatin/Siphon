@@ -1,6 +1,7 @@
 package app.siphon.ui.library
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,25 +13,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -38,190 +38,207 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.siphon.SiphonApp
 import app.siphon.data.DownloadItem
 import app.siphon.data.Status
 import app.siphon.ui.components.EmptyState
-import app.siphon.ui.components.LogDialog
-import app.siphon.ui.components.MetaLine
+import app.siphon.ui.components.Facts
+import app.siphon.ui.components.Stamp
 import app.siphon.ui.components.Thumbnail
-import app.siphon.ui.components.copyText
 import app.siphon.ui.components.formatDate
 import app.siphon.ui.components.formatDuration
 import app.siphon.ui.components.formatSize
-import app.siphon.ui.components.openFile
-import app.siphon.ui.components.shareFiles
 
-private enum class Filter(val label: String) { All("All"), Video("Video"), Audio("Audio"), Failed("Failed") }
+class LibraryCallbacks(
+    val open: (DownloadItem) -> Unit,
+    val share: (DownloadItem) -> Unit,
+    val copyLink: (DownloadItem) -> Unit,
+    val retry: (DownloadItem) -> Unit,
+    val showLog: (DownloadItem) -> Unit,
+    val remove: (DownloadItem) -> Unit,
+    val deleteFile: (DownloadItem) -> Unit,
+    val clearFinished: () -> Unit,
+)
+
+private enum class Shelf(val label: String) { All("All"), Video("Video"), Audio("Audio"), Unfinished("Didn't finish") }
+
+private fun Shelf.matches(it: DownloadItem) = when (this) {
+    Shelf.All -> true
+    Shelf.Video -> it.status == Status.Done && !it.isAudio
+    Shelf.Audio -> it.status == Status.Done && it.isAudio
+    Shelf.Unfinished -> it.status == Status.Failed || it.status == Status.Canceled
+}
 
 @Composable
-fun LibraryScreen(wide: Boolean) {
-    val context = LocalContext.current
-    val repo = remember { SiphonApp.get(context).downloads }
-    val all by repo.items.collectAsStateWithLifecycle()
-    var filter by remember { mutableStateOf(Filter.All) }
-    var query by remember { mutableStateOf("") }
-    var logFor by remember { mutableStateOf<DownloadItem?>(null) }
+fun LibraryScreen(items: List<DownloadItem>, wide: Boolean, cb: LibraryCallbacks) {
+    var shelf by rememberSaveable { mutableStateOf(Shelf.All) }
+    var query by rememberSaveable { mutableStateOf("") }
     var deleteFor by remember { mutableStateOf<DownloadItem?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
 
-    val finished = all.filterNot { it.status.isActive }
+    val finished = items.filterNot { it.status.isActive }
+    val saved = finished.filter { it.status == Status.Done }
     val shown = finished
-        .filter {
-            when (filter) {
-                Filter.All -> true
-                Filter.Video -> it.status == Status.Done && !it.isAudio
-                Filter.Audio -> it.status == Status.Done && it.isAudio
-                Filter.Failed -> it.status == Status.Failed || it.status == Status.Canceled
-            }
-        }
+        .filter(shelf::matches)
         .filter { query.isBlank() || it.title.contains(query, true) || it.uploader?.contains(query, true) == true }
         .sortedByDescending { it.finishedAt ?: it.createdAt }
+    val gutter = if (wide) 40.dp else 20.dp
 
-    Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.padding(start = if (wide) 32.dp else 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Library", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            OutlinedTextField(
-                value = query, onValueChange = { query = it }, singleLine = true,
-                placeholder = { Text("Search") }, leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                modifier = Modifier.widthIn(max = if (wide) 320.dp else 180.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-            )
-            IconButton(onClick = { confirmClear = true }, enabled = finished.isNotEmpty()) {
-                Icon(Icons.Outlined.DeleteSweep, "Clear list")
-            }
-        }
-        Row(
-            Modifier.padding(horizontal = if (wide) 32.dp else 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Filter.entries.forEach { f -> FilterChip(selected = filter == f, onClick = { filter = f }, label = { Text(f.label) }) }
-        }
-
-        if (shown.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                EmptyState(
-                    Icons.Outlined.VideoLibrary,
-                    if (finished.isEmpty()) "No downloads yet" else "Nothing matches",
-                    if (finished.isEmpty()) "Finished downloads are listed here and saved to Download/Siphon." else "Try another filter.",
-                )
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(if (wide) 280.dp else 220.dp),
-                contentPadding = PaddingValues(if (wide) 32.dp else 16.dp, 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(shown, key = { it.id }) { item ->
-                    LibraryCard(
-                        item,
-                        onOpen = { item.outputs.firstOrNull()?.let { openFile(context, it) } },
-                        onShare = { shareFiles(context, item.outputs) },
-                        onCopyLink = { copyText(context, "link", item.url) },
-                        onRetry = { repo.retry(item.id) },
-                        onLog = { logFor = item },
-                        onRemove = { repo.remove(item.id, deleteFiles = false) },
-                        onDelete = { deleteFor = item },
-                    )
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(if (wide) 264.dp else 200.dp),
+        contentPadding = PaddingValues(start = gutter, end = gutter, top = 28.dp, bottom = 32.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Library", style = MaterialTheme.typography.headlineMedium)
+                        Text(
+                            if (saved.isEmpty()) "Nothing saved yet"
+                            else "${saved.size} saved, ${formatSize(saved.sumOf { d -> d.outputs.sumOf { it.size } })} in Download › Siphon",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (wide) SearchField(query, { query = it }, Modifier.width(320.dp))
+                    IconButton(onClick = { confirmClear = true }, enabled = finished.isNotEmpty()) {
+                        Icon(Icons.Outlined.DeleteSweep, "Clear the list")
+                    }
+                }
+                if (!wide) SearchField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 16.dp))
+                Row(
+                    Modifier.padding(top = 18.dp, bottom = 4.dp).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Shelf.entries.forEach { s ->
+                        val n = finished.count(s::matches)
+                        FilterChip(
+                            selected = shelf == s, onClick = { shelf = s },
+                            label = { Text(if (s == Shelf.All) s.label else "${s.label}  $n", maxLines = 1) },
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    }
                 }
             }
         }
+
+        if (shown.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                    if (finished.isEmpty()) EmptyState("Your library is empty", "Finished downloads collect here, newest first.")
+                    else EmptyState("No matches", "Try another filter or search term.", icon = Icons.Outlined.Search)
+                }
+            }
+        }
+        items(shown, key = { it.id }) { item ->
+            LibraryCard(item, cb, onDelete = { deleteFor = item })
+        }
     }
 
-    logFor?.let { LogDialog(it, { logFor = null }, context) }
     deleteFor?.let { item ->
         AlertDialog(
             onDismissRequest = { deleteFor = null },
-            title = { Text("Delete file?") },
-            text = { Text("“${item.title}” will be removed from Download/Siphon.") },
-            confirmButton = { TextButton(onClick = { repo.remove(item.id, deleteFiles = true); deleteFor = null }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Cancel") } },
+            title = { Text("Delete this file?") },
+            text = { Text("“${item.title}” will be removed from Download › Siphon. This can't be undone.") },
+            confirmButton = { TextButton(onClick = { cb.deleteFile(item); deleteFor = null }) { Text("Delete file") } },
+            dismissButton = { TextButton(onClick = { deleteFor = null }) { Text("Keep") } },
         )
     }
     if (confirmClear) AlertDialog(
         onDismissRequest = { confirmClear = false },
-        title = { Text("Clear list?") },
-        text = { Text("Removes all finished entries from the library. Files stay in Download/Siphon.") },
-        confirmButton = { TextButton(onClick = { repo.clearFinished(); confirmClear = false }) { Text("Clear") } },
-        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
+        title = { Text("Clear the list?") },
+        text = { Text("Everything is removed from this list. Saved files stay in Download › Siphon.") },
+        confirmButton = { TextButton(onClick = { cb.clearFinished(); confirmClear = false }) { Text("Clear list") } },
+        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Keep") } },
     )
 }
 
 @Composable
-private fun LibraryCard(
-    item: DownloadItem,
-    onOpen: () -> Unit,
-    onShare: () -> Unit,
-    onCopyLink: () -> Unit,
-    onRetry: () -> Unit,
-    onLog: () -> Unit,
-    onRemove: () -> Unit,
-    onDelete: () -> Unit,
-) {
+private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Modifier) {
+    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier) {
+        TextField(
+            value = query, onValueChange = onChange, singleLine = true,
+            placeholder = { Text("Search titles and channels") },
+            leadingIcon = { Icon(Icons.Outlined.Search, null) },
+            trailingIcon = if (query.isNotEmpty()) ({ IconButton(onClick = { onChange("") }) { Icon(Icons.Outlined.Close, "Clear search") } }) else null,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun LibraryCard(item: DownloadItem, cb: LibraryCallbacks, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val done = item.status == Status.Done
-    Card(Modifier.fillMaxWidth().clickable { if (done) onOpen() else onLog() }) {
-        Thumbnail(
-            item.thumbnail, item.isAudio, Modifier.fillMaxWidth(), corner = 0.dp,
-            badge = item.outputs.firstOrNull()?.name?.substringAfterLast('.')?.uppercase()
-                ?.let { ext -> listOfNotNull(formatDuration(item.durationSec), ext).joinToString(" · ") },
-        )
-        Row(Modifier.padding(start = 14.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(item.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                if (done) {
-                    MetaLine(listOf(item.uploader, formatSize(item.outputs.sumOf { it.size })))
-                    MetaLine(listOf(formatDate(item.finishedAt ?: item.createdAt)))
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(end = 4.dp).width(16.dp),
-                        )
+    Surface(
+        onClick = { if (done) cb.open(item) else cb.showLog(item) },
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(22.dp),
+    ) {
+        Column(Modifier.padding(8.dp)) {
+            Thumbnail(
+                item.thumbnail, item.isAudio, Modifier.fillMaxWidth(), corner = 16.dp, muted = !done,
+                badge = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item.outputs.firstOrNull()?.name?.substringAfterLast('.')?.uppercase()?.let { Stamp(it) }
+                        formatDuration(item.durationSec)?.let { Stamp(it) }
+                    }
+                },
+            )
+            Row(Modifier.padding(start = 8.dp, top = 12.dp), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(item.title, style = MaterialTheme.typography.titleSmall, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(6.dp))
+                    if (done) {
+                        Facts(item.uploader, formatSize(item.outputs.sumOf { it.size }))
+                        Facts(formatDate(item.finishedAt ?: item.createdAt))
+                    } else {
                         Text(
                             if (item.status == Status.Canceled) "Canceled" else item.error ?: "Failed",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
-            }
-            Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    @Composable
-                    fun entry(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, action: () -> Unit) =
-                        DropdownMenuItem(text = { Text(label) }, leadingIcon = { Icon(icon, null) }, onClick = { menu = false; action() })
-                    if (done) {
-                        entry("Open", Icons.Outlined.OpenInNew, onOpen)
-                        entry("Share", Icons.Outlined.Share, onShare)
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More actions") }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        @Composable
+                        fun entry(label: String, icon: ImageVector, action: () -> Unit) =
+                            DropdownMenuItem(text = { Text(label) }, leadingIcon = { Icon(icon, null) }, onClick = { menu = false; action() })
+                        if (done) {
+                            entry("Open", Icons.AutoMirrored.Outlined.OpenInNew) { cb.open(item) }
+                            entry("Share", Icons.Outlined.Share) { cb.share(item) }
+                        }
+                        entry(if (done) "Download again" else "Try again", Icons.Outlined.Refresh) { cb.retry(item) }
+                        entry("Copy link", Icons.Outlined.ContentCopy) { cb.copyLink(item) }
+                        entry("Show yt-dlp output", Icons.Outlined.Terminal) { cb.showLog(item) }
+                        HorizontalDivider()
+                        entry("Remove from list", Icons.Outlined.RemoveCircleOutline) { cb.remove(item) }
+                        if (done) entry("Delete file", Icons.Outlined.Delete, onDelete)
                     }
-                    entry(if (done) "Download again" else "Retry", Icons.Outlined.Refresh, onRetry)
-                    entry("Copy link", Icons.Outlined.ContentCopy, onCopyLink)
-                    entry("View log", Icons.Outlined.Terminal, onLog)
-                    HorizontalDivider()
-                    entry("Remove from list", Icons.Outlined.RemoveCircleOutline, onRemove)
-                    if (done) entry("Delete file", Icons.Outlined.Delete, onDelete)
                 }
             }
         }

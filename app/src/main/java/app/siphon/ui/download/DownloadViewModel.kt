@@ -36,7 +36,7 @@ data class DownloadUiState(
         (fetch as? FetchState.Loaded)?.info?.isPlaylist == true
 }
 
-class DownloadViewModel(app: Application) : AndroidViewModel(app) {
+class DownloadViewModel(app: Application) : AndroidViewModel(app), DownloadActions {
     private val siphon = app as SiphonApp
     private val _state = MutableStateFlow(DownloadUiState())
     val state: StateFlow<DownloadUiState> = _state
@@ -54,7 +54,7 @@ class DownloadViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(options = defaults) }
     }
 
-    fun setUrl(url: String) {
+    override fun setUrl(url: String) {
         _state.update {
             if (it.url == url) it else it.copy(url = url, fetch = FetchState.Idle, showFormats = false,
                 options = it.options.copy(formatId = null, preset = if (it.options.preset == Preset.Custom) Preset.Best else it.options.preset))
@@ -62,19 +62,19 @@ class DownloadViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Text shared from another app or pasted: pull the first URL out of it and fetch right away. */
-    fun acceptText(text: String) {
+    override fun acceptText(text: String) {
         val url = URL_RE.find(text)?.value ?: text.trim()
         if (url.isBlank()) return
         setUrl(url)
         fetch()
     }
 
-    fun setPlaylist(on: Boolean) {
+    override fun setPlaylist(on: Boolean) {
         _state.update { it.copy(playlist = on, options = it.options.copy(playlist = on)) }
         if (_state.value.fetch !is FetchState.Idle) fetch()
     }
 
-    fun fetch() {
+    override fun fetch() {
         val s = _state.value
         if (s.url.isBlank()) return
         fetchJob?.cancel()
@@ -91,19 +91,19 @@ class DownloadViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun selectPreset(p: Preset) = _state.update { it.copy(options = it.options.copy(preset = p, formatId = null)) }
+    override fun selectPreset(p: Preset) = _state.update { it.copy(options = it.options.copy(preset = p, formatId = null)) }
 
-    fun selectFormat(f: MediaFormat) = _state.update {
+    override fun selectFormat(f: MediaFormat) = _state.update {
         it.copy(options = it.options.copy(
             preset = Preset.Custom, formatId = f.id, formatIsVideoOnly = f.kind == MediaFormat.Kind.VideoOnly,
         ))
     }
 
-    fun toggleFormats() = _state.update { it.copy(showFormats = !it.showFormats) }
+    override fun toggleFormats() = _state.update { it.copy(showFormats = !it.showFormats) }
 
-    fun updateOptions(f: (DownloadOptions) -> DownloadOptions) = _state.update { it.copy(options = f(it.options)) }
+    override fun updateOptions(f: (DownloadOptions) -> DownloadOptions) = _state.update { it.copy(options = f(it.options)) }
 
-    fun download() {
+    override fun download() {
         val s = _state.value
         val url = s.url.trim()
         if (url.isBlank()) return

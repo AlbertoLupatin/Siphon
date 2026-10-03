@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -46,6 +47,11 @@ android {
         compose = true
     }
 
+    testOptions {
+        // Roborazzi renders Compose screens on the JVM via Robolectric (design review without a device).
+        unitTests.isIncludeAndroidResources = true
+    }
+
     packaging {
         // youtubedl-android executes libpython.so / libffmpeg.so from nativeLibraryDir,
         // so native libs must be extracted at install time.
@@ -81,4 +87,12 @@ dependencies {
 
     implementation(libs.youtubedl.library)
     implementation(libs.youtubedl.ffmpeg)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

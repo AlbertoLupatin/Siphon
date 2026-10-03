@@ -1,19 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- funnel -->
-    <path
-        android:fillColor="#FF8AB4FF"
-        android:pathData="M33,32 L75,32 L59,52 L59,62 L49,62 L49,52 Z" />
-    <!-- drop / arrow -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M54,64 L62,64 L54,73 L46,64 Z" />
-    <!-- tray -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M36,68 L40,68 L40,74 L68,74 L68,68 L72,68 L72,78 L36,78 Z" />
+    <group android:translateX="30" android:translateY="29" android:scaleX="1" android:scaleY="1">
+        <path android:pathData="M24,3 C24,3 9,19.5 9,30 A15,15 0 0,0 39,30 C39,19.5 24,3 24,3 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="12" android:startY="6"
+                    android:endX="38" android:endY="46">
+                    <item android:offset="0" android:color="#FFB7E2EE" />
+                    <item android:offset="1" android:color="#FF3E8FA8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M24,20 L24,36 M17.5,30 L24,36.5 L30.5,30"
+            android:strokeColor="#FF1A1512"
+            android:strokeWidth="3.6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
 </vector>
