@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
@@ -67,6 +68,7 @@ import app.siphon.ui.components.formatSize
 
 class LibraryCallbacks(
     val open: (DownloadItem) -> Unit,
+    val openExternal: (DownloadItem) -> Unit,
     val share: (DownloadItem) -> Unit,
     val copyLink: (DownloadItem) -> Unit,
     val retry: (DownloadItem) -> Unit,
@@ -213,7 +215,9 @@ private fun LibraryCard(item: DownloadItem, cb: LibraryCallbacks, onDelete: () -
                     Spacer(Modifier.height(6.dp))
                     if (done) {
                         Facts(item.uploader, formatSize(item.outputs.sumOf { it.size }))
-                        Facts(formatDate(item.finishedAt ?: item.createdAt))
+                        val resumeAt = item.resume?.positionMs?.takeIf { it > 0 }
+                        if (resumeAt != null) Facts("Resume at ${formatDuration((resumeAt / 1000).toInt())}", color = MaterialTheme.colorScheme.secondary)
+                        else Facts(formatDate(item.finishedAt ?: item.createdAt))
                     } else {
                         Text(
                             if (item.status == Status.Canceled) "Canceled" else item.error ?: "Failed",
@@ -229,7 +233,8 @@ private fun LibraryCard(item: DownloadItem, cb: LibraryCallbacks, onDelete: () -
                         fun entry(label: String, icon: ImageVector, action: () -> Unit) =
                             DropdownMenuItem(text = { Text(label) }, leadingIcon = { Icon(icon, null) }, onClick = { menu = false; action() })
                         if (done) {
-                            entry("Open", Icons.AutoMirrored.Outlined.OpenInNew) { cb.open(item) }
+                            entry("Play", Icons.Outlined.PlayArrow) { cb.open(item) }
+                            entry("Open in another app", Icons.AutoMirrored.Outlined.OpenInNew) { cb.openExternal(item) }
                             entry("Share", Icons.Outlined.Share) { cb.share(item) }
                         }
                         entry(if (done) "Download again" else "Try again", Icons.Outlined.Refresh) { cb.retry(item) }

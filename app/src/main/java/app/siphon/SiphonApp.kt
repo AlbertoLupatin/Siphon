@@ -3,6 +3,7 @@ package app.siphon
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import app.siphon.airplay.OutputManager
 import app.siphon.data.DownloadRepository
 import app.siphon.data.SettingsRepository
 import app.siphon.engine.Engine
@@ -16,11 +17,13 @@ class SiphonApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     lateinit var settings: SettingsRepository private set
     lateinit var downloads: DownloadRepository private set
+    lateinit var outputs: OutputManager private set
 
     override fun onCreate() {
         super.onCreate()
         settings = SettingsRepository(this)
         downloads = DownloadRepository(this, settings, appScope)
+        outputs = OutputManager(this)
         appScope.launch {
             Engine.init(this@SiphonApp)
             autoUpdate()

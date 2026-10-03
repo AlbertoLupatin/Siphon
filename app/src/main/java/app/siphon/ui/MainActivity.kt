@@ -55,6 +55,7 @@ import app.siphon.SiphonApp
 import app.siphon.data.AppSettings
 import app.siphon.data.DownloadItem
 import app.siphon.engine.Engine
+import app.siphon.player.PlayerActivity
 import app.siphon.ui.components.LogDialog
 import app.siphon.ui.components.copyText
 import app.siphon.ui.components.openFile
@@ -136,7 +137,8 @@ private fun AppRoot(vm: DownloadViewModel, settings: AppSettings, shareSignal: I
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.messages.value = null } }
 
     val repo = app.downloads
-    val open: (DownloadItem) -> Unit = { it.outputs.firstOrNull()?.let { out -> openFile(context, out) } }
+    val open: (DownloadItem) -> Unit = { if (it.outputs.isNotEmpty()) PlayerActivity.start(context, it.id) }
+    val openExternal: (DownloadItem) -> Unit = { it.outputs.firstOrNull()?.let { out -> openFile(context, out) } }
     val queueCb = remember {
         QueueCallbacks(
             cancel = { repo.cancel(it.id) }, retry = { repo.retry(it.id) }, open = open,
@@ -146,6 +148,7 @@ private fun AppRoot(vm: DownloadViewModel, settings: AppSettings, shareSignal: I
     val libraryCb = remember {
         LibraryCallbacks(
             open = open,
+            openExternal = openExternal,
             share = { shareFiles(context, it.outputs) },
             copyLink = { copyText(context, "Link", it.url) },
             retry = { repo.retry(it.id) },

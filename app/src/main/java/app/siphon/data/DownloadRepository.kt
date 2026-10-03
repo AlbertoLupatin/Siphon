@@ -19,6 +19,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -141,11 +146,12 @@ class DownloadRepository(
 
             update(item.id) { it.copy(status = Status.Processing, stage = "Saving to Downloads", speed = null) }
             val files = dir.walkTopDown()
-                .filter { it.isFile && it.extension !in setOf("part", "ytdl", "temp", "json") }
+                .filter { it.isFile && it.name != Engine.META_FILE && it.extension !in setOf("part", "ytdl", "temp", "json", "jsonl") }
                 .sortedBy { it.name }
                 .toList()
             if (files.isEmpty()) error("yt-dlp finished but produced no files")
-            val outs = files.map { MediaStoreSaver.publish(context, it) }
+            val chapters = readChapters(File(dir, Engine.META_FILE))
+            val outs = files.map { MediaStoreSaver.publish(context, it).copy(chapters = chapters[it.name].orEmpty()) }
             update(item.id) {
                 it.copy(
                     status = Status.Done, progress = 100f, stage = null, speed = null, etaSec = -1,
@@ -176,6 +182,32 @@ class DownloadRepository(
                 ?.let { DownloadService.notifyFinished(context, it) }
         }
     }
+
+    /** Parses the after_move sidecar into file name → chapters. */
+    private fun readChapters(meta: File): Map<String, List<Chapter>> {
+        if (!meta.exists()) return emptyMap()
+        return meta.readLines().mapNotNull { line ->
+            runCatching {
+                val o = json.parseToJsonElement(line).jsonObject
+                val name = File(o["filepath"]!!.jsonPrimitive.content).name
+                val list = (o["chapters"] as? JsonArray).orEmpty().mapNotNull { c ->
+                    val co = c.jsonObject
+                    Chapter(
+                        startSec = co["start_time"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null,
+                        endSec = co["end_time"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null,
+                        title = co["title"]?.jsonPrimitive?.contentOrNull ?: "",
+                    )
+                }
+                name to list
+            }.getOrNull()
+        }.toMap()
+    }
+
+    /** Remembers where playback stopped so the player can resume; 0 clears it. */
+    fun savePosition(id: String, outputIndex: Int, positionMs: Long) =
+        update(id) { it.copy(resume = Resume(outputIndex, positionMs)) }
+
+    fun find(id: String): DownloadItem? = _items.value.firstOrNull { it.id == id }
 
     private fun load(): List<DownloadItem> = try {
         if (!store.exists()) emptyList()

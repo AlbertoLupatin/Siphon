@@ -41,7 +41,21 @@ enum class Status { Queued, Running, Processing, Done, Failed, Canceled;
 }
 
 @Serializable
-data class OutputFile(val uri: String, val name: String, val mime: String, val size: Long)
+data class Resume(val outputIndex: Int, val positionMs: Long)
+
+@Serializable
+data class Chapter(val startSec: Double, val endSec: Double, val title: String)
+
+@Serializable
+data class OutputFile(
+    val uri: String,
+    val name: String,
+    val mime: String,
+    val size: Long,
+    val chapters: List<Chapter> = emptyList(),
+) {
+    val isAudio get() = mime.startsWith("audio/")
+}
 
 @Serializable
 data class DownloadItem(
@@ -63,6 +77,7 @@ data class DownloadItem(
     val outputs: List<OutputFile> = emptyList(),
     val error: String? = null,
     val log: String = "",
+    val resume: Resume? = null,
 ) {
     val isAudio get() = options.preset.isAudio
 }

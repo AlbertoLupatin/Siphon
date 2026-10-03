@@ -61,7 +61,7 @@ class ScreensTest {
     }
 
     private val queueCb = QueueCallbacks({}, {}, {}, {}, {}, {})
-    private val libraryCb = LibraryCallbacks({}, {}, {}, {}, {}, {}, {}, {})
+    private val libraryCb = LibraryCallbacks({}, {}, {}, {}, {}, {}, {}, {}, {})
     private val engine = Engine.State.Ready("2026.08.19")
 
     @OptIn(ExperimentalCoilApi::class)

@@ -21,6 +21,8 @@ import java.util.UUID
 
 /** Thin coroutine-friendly facade over youtubedl-android (bundled Python + yt-dlp + ffmpeg + QuickJS). */
 object Engine {
+    /** Per-download metadata sidecar, see [buildDownloadRequest]. Never published. */
+    const val META_FILE = "siphon-meta.jsonl"
 
     sealed interface State {
         data object Initializing : State
@@ -107,6 +109,9 @@ object Engine {
         else "%(title).150B [%(id)s].%(ext)s"
         r.addOption("-o", File(outDir, name).absolutePath)
         r.addOption("--no-mtime")
+        // One JSON line per finished file, written after post-processing so chapter times
+        // already account for SponsorBlock cuts. Read back by the repository for the player.
+        r.addCommands(listOf("--print-to-file", "after_move:%(.{filepath,chapters})j", File(outDir, META_FILE).absolutePath))
         r.addOption(if (o.playlist) "--yes-playlist" else "--no-playlist")
         r.addOption("--concurrent-fragments", o.concurrentFragments)
 
