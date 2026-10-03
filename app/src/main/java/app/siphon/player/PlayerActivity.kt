@@ -196,14 +196,15 @@ class PlayerActivity : ComponentActivity(), PlayerActions {
         val current = c.currentMediaItem?.mediaId
         val it = item ?: current?.substringBefore('/')?.let(repo::find)?.also { found -> item = found } ?: return
         if (!force && current?.startsWith(it.id + "/") == true) return
-        val media = it.outputs.mapIndexed { i, out ->
+        val playable = it.outputs.withIndex().filter { (_, out) -> out.isPlayable }
+        val media = playable.map { (i, out) ->
             MediaItem.Builder()
                 .setMediaId("${it.id}/$i")
                 .setUri(out.uri)
                 .setMimeType(out.mime)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
-                        .setTitle(if (it.outputs.size > 1) cleanName(out.name) else it.title)
+                        .setTitle(if (playable.size > 1) cleanName(out.name) else it.title)
                         .setArtist(it.uploader)
                         .setArtworkUri(it.thumbnail?.toUri())
                         .build()
@@ -211,11 +212,15 @@ class PlayerActivity : ComponentActivity(), PlayerActions {
                 .build()
         }
         if (media.isEmpty()) return
-        val resume = it.resume?.takeIf { r -> r.outputIndex in media.indices && r.positionMs > 5_000 }
-        c.setMediaItems(media, resume?.outputIndex ?: 0, resume?.positionMs ?: 0)
+        val resume = it.resume?.takeIf { r -> r.positionMs > 5_000 }
+        val startIndex = playable.indexOfFirst { (i, _) -> i == resume?.outputIndex }
+        if (startIndex >= 0) c.setMediaItems(media, startIndex, resume!!.positionMs) else c.setMediaItems(media)
         c.prepare()
         c.play()
     }
+
+    /** Position in [DownloadItem.outputs] of the playing item (media ids are "itemId/outputIndex"). */
+    private fun currentOutput(c: Player): Int? = c.currentMediaItem?.mediaId?.substringAfter('/')?.toIntOrNull()
 
     private fun cleanName(file: String) =
         file.substringBeforeLast('.').replace(Regex("""^\d{2,4} - """), "").replace(Regex("""\s*\[[^\]]+]$"""), "")
@@ -223,8 +228,7 @@ class PlayerActivity : ComponentActivity(), PlayerActions {
     private fun refresh() {
         val c = controller ?: return
         val it = item
-        val index = c.currentMediaItemIndex
-        val output = it?.outputs?.getOrNull(index)
+        val output = currentOutput(c)?.let { i -> it?.outputs?.getOrNull(i) }
         val (text, audio) = tracks(c.currentTracks)
         val out = outputs.state.value
         state.value = state.value.copy(
@@ -289,7 +293,7 @@ class PlayerActivity : ComponentActivity(), PlayerActions {
         val c = controller ?: return
         val id = c.currentMediaItem?.mediaId?.substringBefore('/') ?: return
         val ended = c.playbackState == Player.STATE_ENDED || (c.duration > 0 && c.duration - c.currentPosition < 10_000)
-        repo.savePosition(id, c.currentMediaItemIndex, if (ended) 0 else c.currentPosition)
+        repo.savePosition(id, currentOutput(c) ?: 0, if (ended) 0 else c.currentPosition)
     }
 
     private fun immersive() {

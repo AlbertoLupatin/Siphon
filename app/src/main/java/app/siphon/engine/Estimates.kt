@@ -5,7 +5,7 @@ import app.siphon.data.Preset
 /** What a preset would roughly resolve to for this media — mirrors the format/sort logic in [Engine]. */
 data class PresetEstimate(val available: Boolean, val resolution: String?, val sizeBytes: Long?)
 
-fun MediaInfo.maxHeight(): Int? = formats.filter { it.hasVideo }.mapNotNull { it.height }.maxOrNull()
+fun MediaInfo.maxQuality(): Int? = formats.filter { it.hasVideo }.mapNotNull { it.quality }.maxOrNull()
 
 fun MediaInfo.estimate(preset: Preset, compatibleMp4: Boolean): PresetEstimate {
     if (isPlaylist || formats.isEmpty()) return PresetEstimate(available = true, resolution = null, sizeBytes = null)
@@ -30,13 +30,13 @@ fun MediaInfo.estimate(preset: Preset, compatibleMp4: Boolean): PresetEstimate {
     }
     if (preset == Preset.Custom) return PresetEstimate(true, null, null)
 
-    val maxH = maxHeight() ?: return PresetEstimate(true, null, null)
+    val maxQ = maxQuality() ?: return PresetEstimate(true, null, null)
     val limit = preset.maxHeight
-    // A preset is meaningful only if the source actually reaches that height (with ~10% tolerance for odd aspect ratios).
-    val available = limit == null || maxH >= limit * 0.9
-    val videos = formats.filter { it.hasVideo && it.height != null && (limit == null || it.height <= limit) }
-    val topH = videos.maxOfOrNull { it.height!! } ?: return PresetEstimate(available, null, null)
-    val atTop = videos.filter { it.height == topH }
+    // A preset is meaningful only if the source reaches that quality class.
+    val available = limit == null || maxQ >= limit
+    val videos = formats.filter { it.hasVideo && it.quality != null && (limit == null || it.quality!! <= limit) }
+    val topH = videos.maxOfOrNull { it.quality!! } ?: return PresetEstimate(available, null, null)
+    val atTop = videos.filter { it.quality == topH }
     val v = atTop.sortedWith(
         compareByDescending<MediaFormat> { compatibleMp4 && it.vcodec?.startsWith("avc") == true }
             .thenByDescending { it.tbr ?: 0.0 }

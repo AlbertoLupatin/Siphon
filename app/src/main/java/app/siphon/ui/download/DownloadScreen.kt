@@ -574,7 +574,7 @@ private fun FormatList(formats: List<MediaFormat>, selected: String?, onSelect: 
             "Video only (best audio is added)" to formats.filter { it.kind == MediaFormat.Kind.VideoOnly },
             "Audio only" to formats.filter { it.kind == MediaFormat.Kind.AudioOnly },
         ).map { (title, list) ->
-            title to list.sortedWith(compareByDescending<MediaFormat> { it.height ?: 0 }.thenByDescending { it.tbr ?: it.abr ?: 0.0 })
+            title to list.sortedWith(compareByDescending<MediaFormat> { it.quality ?: 0 }.thenByDescending { it.tbr ?: it.abr ?: 0.0 })
         }.filter { it.second.isNotEmpty() }
     }
     Surface(
@@ -614,8 +614,8 @@ private fun FormatList(formats: List<MediaFormat>, selected: String?, onSelect: 
 }
 
 private fun describe(f: MediaFormat): String = when {
-    f.hasVideo && f.height != null -> buildString {
-        append("${f.height}p")
+    f.hasVideo && f.quality != null -> buildString {
+        append("${f.quality}p")
         f.fps?.takeIf { it > 30 }?.let { append(it.toInt()) }
     }
     f.hasVideo -> "Video"

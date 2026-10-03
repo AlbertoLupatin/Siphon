@@ -204,7 +204,8 @@ private fun LibraryCard(item: DownloadItem, cb: LibraryCallbacks, onDelete: () -
                 item.thumbnail, item.isAudio, Modifier.fillMaxWidth(), corner = 16.dp, muted = !done,
                 badge = {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        item.outputs.firstOrNull()?.name?.substringAfterLast('.')?.uppercase()?.let { Stamp(it) }
+                        (item.outputs.firstOrNull { it.isPlayable } ?: item.outputs.firstOrNull())
+                            ?.name?.substringAfterLast('.')?.uppercase()?.let { Stamp(it) }
                         formatDuration(item.durationSec)?.let { Stamp(it) }
                     }
                 },

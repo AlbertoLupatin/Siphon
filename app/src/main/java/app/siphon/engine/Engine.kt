@@ -143,7 +143,8 @@ object Engine {
 
         if (!o.preset.isAudio) {
             if (o.subtitles) {
-                r.addOption("--write-subs")
+                // --embed-subs alone: yt-dlp fetches the subtitles, embeds them and deletes the
+                // sidecar files (adding --write-subs would keep them next to the video).
                 r.addOption("--sub-langs", o.subtitleLangs)
                 r.addOption("--embed-subs")
             }

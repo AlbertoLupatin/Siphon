@@ -55,6 +55,7 @@ data class OutputFile(
     val chapters: List<Chapter> = emptyList(),
 ) {
     val isAudio get() = mime.startsWith("audio/")
+    val isPlayable get() = isAudio || mime.startsWith("video/")
 }
 
 @Serializable

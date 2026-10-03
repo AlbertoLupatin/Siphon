@@ -146,7 +146,9 @@ class DownloadRepository(
 
             update(item.id) { it.copy(status = Status.Processing, stage = "Saving to Downloads", speed = null) }
             val files = dir.walkTopDown()
-                .filter { it.isFile && it.name != Engine.META_FILE && it.extension !in setOf("part", "ytdl", "temp", "json", "jsonl") }
+                .filter { it.isFile && it.extension !in setOf("part", "ytdl", "temp") }
+                // Only the media itself; stray subtitles, thumbnails or metadata stay behind.
+                .filter { MediaStoreSaver.mimeOf(it).let { m -> m.startsWith("video/") || m.startsWith("audio/") } }
                 .sortedBy { it.name }
                 .toList()
             if (files.isEmpty()) error("yt-dlp finished but produced no files")

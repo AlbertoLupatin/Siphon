@@ -36,7 +36,19 @@ data class MediaFormat(
     val tbr: Double?,
     val sizeBytes: Long?,
     val note: String?,
+    val width: Int? = null,
 ) {
+    /**
+     * YouTube-style quality class: wide films are graded by width (2048×858 is "1080p"),
+     * portrait video by its shorter side. Snapped to the usual ladder.
+     */
+    val quality: Int?
+        get() {
+            val h = height ?: return null
+            val w = width ?: return snap(h)
+            return snap(if (w >= h) maxOf(h, w * 9 / 16) else w)
+        }
+
     val hasVideo get() = vcodec != null && vcodec != "none"
     val hasAudio get() = acodec != null && acodec != "none"
     val kind: Kind
@@ -47,6 +59,11 @@ data class MediaFormat(
         }
 
     enum class Kind { Muxed, VideoOnly, AudioOnly }
+
+    companion object {
+        private val LADDER = listOf(4320, 2160, 1440, 1080, 720, 480, 360, 240, 144)
+        fun snap(v: Int): Int = LADDER.firstOrNull { v >= it * 0.9 } ?: v
+    }
 }
 
 object MediaInfoParser {
@@ -62,6 +79,7 @@ object MediaInfoParser {
             val o = e as? JsonObject ?: return@mapNotNull null
             PlaylistEntry(o.str("title") ?: o.str("id") ?: "?", o.num("duration")?.toInt())
         }
+        val duration = root.num("duration")
         val formats = (root["formats"] as? JsonArray).orEmpty().mapNotNull { f ->
             val o = f as? JsonObject ?: return@mapNotNull null
             val fmt = MediaFormat(
@@ -73,8 +91,11 @@ object MediaInfoParser {
                 acodec = o.str("acodec"),
                 abr = o.num("abr"),
                 tbr = o.num("tbr"),
-                sizeBytes = (o.num("filesize") ?: o.num("filesize_approx"))?.toLong(),
+                // YouTube often omits sizes; bitrate × duration is a close estimate.
+                sizeBytes = (o.num("filesize") ?: o.num("filesize_approx")
+                    ?: o.num("tbr")?.let { tbr -> duration?.let { tbr * 125 * it } })?.toLong(),
                 note = o.str("format_note"),
+                width = o.num("width")?.toInt(),
             )
             // Drop storyboards / images and manifest placeholders with no streams.
             if (fmt.ext == "mhtml" || (!fmt.hasVideo && !fmt.hasAudio)) null else fmt
@@ -87,8 +108,8 @@ object MediaInfoParser {
             title = root.str("title") ?: root.str("id") ?: "Untitled",
             uploader = root.str("uploader") ?: root.str("channel") ?: root.str("uploader_id"),
             thumbnail = thumbnail,
-            durationSec = root.num("duration")?.toInt(),
-            extractor = root.str("extractor_key") ?: root.str("extractor"),
+            durationSec = duration?.toInt(),
+            extractor = siteName(root.str("extractor_key") ?: root.str("extractor"), root.str("webpage_url")),
             webpageUrl = root.str("webpage_url"),
             isPlaylist = isPlaylist,
             entries = entries,
@@ -103,6 +124,21 @@ object MediaInfoParser {
         val p = this[key] as? JsonPrimitive ?: return null
         if (p is JsonNull) return null
         return p.doubleOrNull ?: p.longOrNull?.toDouble()
+    }
+
+    private val SITE_NAMES = mapOf(
+        "youtube" to "YouTube", "youtubetab" to "YouTube", "twitter" to "X", "soundcloud" to "SoundCloud",
+        "vimeo" to "Vimeo", "instagram" to "Instagram", "tiktok" to "TikTok", "twitch" to "Twitch",
+        "twitchvod" to "Twitch", "twitchclips" to "Twitch", "reddit" to "Reddit", "bandcamp" to "Bandcamp",
+        "facebook" to "Facebook", "dailymotion" to "Dailymotion", "bilibili" to "Bilibili", "rai" to "RaiPlay",
+    )
+
+    /** Human site name; for the generic extractor fall back to the page's domain. */
+    private fun siteName(key: String?, url: String?): String? {
+        val k = key?.lowercase()?.replace(Regex("[^a-z]"), "")
+        SITE_NAMES[k]?.let { return it }
+        if (k == null || k == "generic") return url?.substringAfter("://")?.substringBefore('/')?.removePrefix("www.")
+        return key
     }
 
     private fun JsonObject.lastThumb(): String? =

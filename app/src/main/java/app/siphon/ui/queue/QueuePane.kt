@@ -184,7 +184,10 @@ private fun CompactRow(item: DownloadItem, cb: QueueCallbacks) {
             Spacer(Modifier.height(2.dp))
             when (item.status) {
                 Status.Queued -> Facts("Waiting for a free slot")
-                Status.Done -> Facts(if (item.outputs.size > 1) "Saved ${item.outputs.size} files" else "Saved", color = MaterialTheme.colorScheme.tertiary)
+                Status.Done -> {
+                    val n = item.outputs.count { it.isPlayable }
+                    Facts(if (n > 1) "Saved $n files" else "Saved", color = MaterialTheme.colorScheme.tertiary)
+                }
                 Status.Failed -> Text(
                     item.error ?: "Failed", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error, maxLines = 1, overflow = TextOverflow.Ellipsis,

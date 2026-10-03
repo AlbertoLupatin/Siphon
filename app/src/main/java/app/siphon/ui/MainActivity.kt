@@ -137,7 +137,7 @@ private fun AppRoot(vm: DownloadViewModel, settings: AppSettings, shareSignal: I
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.messages.value = null } }
 
     val repo = app.downloads
-    val open: (DownloadItem) -> Unit = { if (it.outputs.isNotEmpty()) PlayerActivity.start(context, it.id) }
+    val open: (DownloadItem) -> Unit = { if (it.outputs.any { o -> o.isPlayable }) PlayerActivity.start(context, it.id) }
     val openExternal: (DownloadItem) -> Unit = { it.outputs.firstOrNull()?.let { out -> openFile(context, out) } }
     val queueCb = remember {
         QueueCallbacks(
